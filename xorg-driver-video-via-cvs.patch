@@ -1,0 +1,925 @@
+===================================================================
+RCS file: /cvs/xorg/driver/xf86-video-via/configure.ac,v
+retrieving revision 1.11
+retrieving revision 1.12
+diff -u -r1.11 -r1.12
+--- xf86-video-via/configure.ac	2005/11/10 06:06:56	1.11
++++ xf86-video-via/configure.ac	2005/11/14 21:00:14	1.12
+@@ -92,7 +92,7 @@
+         AC_DEFINE(XF86DRI,1,[Enable DRI driver support])
+         AC_DEFINE(XF86DRI_DEVEL,1,[Enable developmental DRI driver support])
+         case "$host_cpu" in
+-            x86*)
++            i*86)
+                 XVMC=yes ;;
+             amd64*|x86_64*)
+                 XVMC=yes ;;
+===================================================================
+RCS file: /cvs/xorg/driver/xf86-video-via/src/xvmc/Makefile.am,v
+retrieving revision 1.4
+retrieving revision 1.5
+diff -u -r1.4 -r1.5
+--- xf86-video-via/src/xvmc/Makefile.am	2005/11/10 06:06:56	1.4
++++ xf86-video-via/src/xvmc/Makefile.am	2005/11/14 20:57:32	1.5
+@@ -1,5 +1,6 @@
+ if XVMC
+ SUBDIRS = unichrome unichromeProA
++endif
+ 
+ EXTRA_DIST = driDrawable.c \
+              driDrawable.h \
+@@ -8,5 +9,3 @@
+              xf86dristr.h \
+              viaXvMCPriv.h \
+              viaLowLevel.h
+-
+-endif
+--- xf86-video-via-0.1.32/src/xvmc/driDrawable.h.orig	1970-01-01 00:00:00.000000000 +0000
++++ xf86-video-via-0.1.32/src/xvmc/driDrawable.h	2005-11-20 17:44:23.000000000 +0000
+@@ -0,0 +1,64 @@
++/*****************************************************************************
++ * driDrawable.h: Lean Version of DRI utilities.
++ *
++ * Copyright (c) 2005 Thomas Hellstrom. All rights reserved.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Software"),
++ * to deal in the Software without restriction, including without limitation
++ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHOR(S) OR COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++ * DEALINGS IN THE SOFTWARE.
++ */
++
++#ifndef _DRIDRAWABLE_H
++#define _DRIDRAWABLE_H
++
++typedef struct _drawableInfo {
++    drm_drawable_t drmDraw;
++    unsigned stamp;
++    unsigned index;
++    drm_clip_rect_t *clipFront;
++    drm_clip_rect_t *clipBack;
++    int x;
++    int y;
++    int w;
++    int h;
++    int backX;
++    int backY;
++    int numClipFront;
++    int numClipBack;
++    Bool touched;
++} drawableInfo;
++
++/*
++ * Get updated info about the drawable "draw". The drawableInfo record returned is malloced
++ * and administrated internally. Never free it unless you know exactly what you are doing.
++ * The drm hash table "drawHash" needs to be initialized externally.
++ */
++
++extern int
++getDRIDrawableInfoLocked (void *drawHash, Display *display, int screen, Drawable draw,
++			  unsigned lockFlags, int drmFD, drm_context_t drmContext,
++			  drmAddress sarea, Bool updateInfo, drawableInfo **info, 
++			  unsigned long infoSize);
++
++/*
++ * Free all resources created by the above function. Typically done on exit.
++ */
++
++extern void 
++driDestroyHashContents(void *drawHash);
++
++#endif
+--- xf86-video-via-0.1.32/src/xvmc/viaLowLevel.h.orig	1970-01-01 00:00:00.000000000 +0000
++++ xf86-video-via-0.1.32/src/xvmc/viaLowLevel.h	2005-11-20 17:44:24.000000000 +0000
+@@ -0,0 +1,148 @@
++/*****************************************************************************
++ * VIA Unichrome XvMC extension client lib.
++ *
++ * Copyright (c) 2004 The Unichrome Project. All rights reserved.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Software"),
++ * to deal in the Software without restriction, including without limitation
++ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHOR(S) OR COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++ * DEALINGS IN THE SOFTWARE.
++ */
++
++
++/*
++ * Authors: Thomas Hellström 2004 - 2005.
++ */
++
++
++#ifndef VIA_LOWLEVEL_H                  
++#define VIA_LOWLEVEL_H
++
++
++/*
++ * The below define is cache size sensitive. Increasing the AGP buffer size
++ * will enable the library to do deeper pipelining, but will degrade the
++ * performance in the drm dma command verifier. 
++ */
++
++#define LL_AGP_CMDBUF_SIZE (4096*2)
++#define LL_PCI_CMDBUF_SIZE (4096)
++
++#define LL_MODE_DECODER_SLICE 0x01
++#define LL_MODE_DECODER_IDLE 0x02
++#define LL_MODE_VIDEO   0x04
++#define LL_MODE_2D      0x08
++#define LL_MODE_3D      0x10
++
++/*
++ * Errors
++ */
++
++#define LL_DECODER_TIMEDOUT 0x00000001
++#define LL_IDCT_FIFO_ERROR  0x00000002
++#define LL_SLICE_FIFO_ERROR 0x00000004
++#define LL_SLICE_FAULT      0x00000008
++#define LL_DMA_TIMEDOUT     0x00000010
++#define LL_VIDEO_TIMEDOUT   0x00000020
++#define LL_ACCEL_TIMEDOUT   0x00000040
++#define LL_PCI_COMMAND_ERR  0x00000080
++#define LL_AGP_COMMAND_ERR  0x00000100
++
++#define VIA_SLICEBUSYMASK        0x00000200
++#define VIA_BUSYMASK             0x00000207
++#define VIA_SLICEIDLEVAL         0x00000200
++#define VIA_IDLEVAL              0x00000204   
++
++#include "via_drm.h"
++#include "viaXvMCPriv.h"
++
++#define setRegion(xx,yy,ww,hh,region) \
++    do {			  \
++	(region).x = (xx);	  \
++	(region).y = (yy);	  \
++	(region).w = (ww);	  \
++	(region).h = (hh);	  \
++    } while(0)
++
++#define regionEqual(r1, r2)				\
++    ((r1).x == (r2).x &&				\
++     (r1).y == (r2).y &&				\
++     (r1).w == (r2).w &&				\
++     (r1).h == (r2).h)
++
++
++
++extern void
++*initXvMCLowLevel(int fd, drm_context_t *ctx,
++		 drmLockPtr hwLock, drmAddress mmioAddress, 
++		 drmAddress fbAddress, unsigned fbStride, unsigned fbDepth,
++		 unsigned width, unsigned height, int useAgp, unsigned chipId );
++
++extern void setLowLevelLocking(void *xlp, int perFormLocking);
++extern void closeXvMCLowLevel(void *xlp);
++extern void flushPCIXvMCLowLevel(void *xlp);
++extern CARD32 viaDMATimeStampLowLevel(void *xlp);
++extern void setAGPSyncLowLevel(void *xlp, int val, CARD32 timeStamp);
++
++
++/*
++ * These two functions also return and clear the current error status.
++ */
++
++extern unsigned flushXvMCLowLevel(void *xlp);
++extern unsigned syncXvMCLowLevel(void *xlp, unsigned int mode,
++				 unsigned int doSleep, CARD32 timeStamp);
++
++extern void hwlUnlock(void *xlp, int videoLock); 
++extern void hwlLock(void *xlp, int videoLock); 
++
++extern void viaVideoSetSWFLipLocked(void *xlp, unsigned yOffs, unsigned uOffs,
++				    unsigned vOffs, unsigned yStride, unsigned uvStride);
++
++extern void viaMpegReset(void *xlp);
++extern void viaMpegWriteSlice(void *xlp, CARD8* slice, 
++				    int nBytes, CARD32 sCode);
++extern void viaMpegSetSurfaceStride(void *xlp, ViaXvMCContext *ctx);
++extern void viaMpegSetFB(void *xlp,unsigned i, unsigned yOffs,
++			       unsigned uOffs, unsigned vOffs);
++extern void viaMpegBeginPicture(void *xlp, ViaXvMCContext *ctx,unsigned width,
++				unsigned height,const XvMCMpegControl *control);
++
++/*
++ * Low-level Video functions in viaLowLevel.c
++ */ 
++
++
++extern void viaBlit(void *xlp,unsigned bpp,unsigned srcBase,
++		    unsigned srcPitch,unsigned dstBase,unsigned dstPitch,
++		    unsigned w,unsigned h,int xdir,int ydir, 
++		    unsigned blitMode, unsigned color); 
++
++extern void viaVideoSWFlipLocked(void *xlp, unsigned flags,
++				 int progressiveSequence);
++
++extern void viaVideoSubPictureLocked(void *xlp,ViaXvMCSubPicture *pViaSubPic);
++extern void viaVideoSubPictureOffLocked(void *xlp);
++
++
++
++
++#define PCI_CHIP_VT3204         0x3108 /* K8M800 */
++#define PCI_CHIP_VT3259         0x3118 /* PM800/PM880/CN400 */
++#define PCI_CHIP_CLE3122        0x3122 /* CLE266 */
++#define PCI_CHIP_VT3205         0x7205 /* KM400 */
++
++#endif
+--- xf86-video-via-0.1.32/src/xvmc/viaXvMCPriv.h.orig	1970-01-01 00:00:00.000000000 +0000
++++ xf86-video-via-0.1.32/src/xvmc/viaXvMCPriv.h	2005-11-20 17:44:24.000000000 +0000
+@@ -0,0 +1,198 @@
++/*****************************************************************************
++ * VIA Unichrome XvMC extension client lib.
++ *
++ * Copyright (c) 2004 Thomas Hellström. All rights reserved.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Software"),
++ * to deal in the Software without restriction, including without limitation
++ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHOR(S) OR COPYRIGHT HOLDER(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++ * DEALINGS IN THE SOFTWARE.
++ */
++
++#ifndef _VIAXVMCPRIV_H
++#define _VIAXVMCPRIV_H 1
++
++#include <X11/Xlibint.h>
++#include <X11/extensions/XvMC.h>
++#include <X11/extensions/XvMClib.h>
++#include <stdlib.h>
++#include <X11/Xutil.h>
++#include <X11/extensions/vldXvMC.h>
++#include "via_xvmc.h"
++
++typedef struct{
++    int x;
++    int y;
++    int w;
++    int h;
++} XvMCRegion;
++
++
++extern Status _xvmc_create_context(Display *dpy, XvMCContext *context,
++				   int *priv_count, uint **priv_data);
++extern Status _xvmc_destroy_context(Display *dpy, XvMCContext *context);
++extern Status _xvmc_create_surface(Display *dpy, XvMCContext *context,
++				   XvMCSurface *surface, int *priv_count,
++				   uint **priv_data);
++extern Status _xvmc_destroy_surface(Display *dpy, XvMCSurface *surface);
++extern Status _xvmc_create_subpicture(Display *dpy, XvMCContext *context,
++				      XvMCSubpicture *subpicture,
++				      int *priv_count, uint **priv_data);
++extern Status _xvmc_destroy_subpicture(Display *dpy,
++				       XvMCSubpicture *subpicture);
++
++#define VIA_SUBPIC_PALETTE_SIZE 16 /*Number of colors in subpicture palette*/
++#define VIA_CBUFFERSIZE 4096       /*Hardware command buffer size*/
++#define VIA_MAX_BUFS 2             /*Number of YUV buffers per surface*/
++#define VIA_MAX_RENDSURF 3         /*Maximum numbers of surfaces per context 
++				     that can answer RENDERING to a rendering 
++				     query*/
++
++typedef enum{
++  context_drawHash,
++  context_lowLevel,
++  context_mutex,
++  context_sAreaMap,
++  context_fbMap,
++  context_mmioMap,
++  context_drmContext,
++  context_fd,
++  context_driConnection,
++  context_context,
++  context_none
++} ContextRes;
++
++
++typedef struct{
++    unsigned ctxNo;                 /* XvMC private context reference number */
++    pthread_mutex_t ctxMutex;       /* Mutex for multi-threading. Not used */
++    drm_context_t drmcontext;       /* The drm context */
++    drm_handle_t fbOffset;          /* Handle to drm frame-buffer area */
++    drm_handle_t mmioOffset;        /* Handle to drm mmio area */
++    drm_handle_t sAreaOffset;       /* Handle to drm shared memory area */
++    unsigned fbSize;                /* Size of drm frame-buffer area */
++    unsigned mmioSize;              /* Size of drm mmio area */
++    unsigned sAreaSize;             /* Size of drm shared memory area */
++    unsigned sAreaPrivOffset;       /* Offset in sarea to private part */
++    drmAddress fbAddress;           /* Virtual address of frame buffer area */
++    drmAddress mmioAddress;         /* Virtual address of mmio area */
++    drmAddress sAreaAddress;        /* Virtual address of shared memory area */
++    char busIdString[21];           /* Busid of video card */
++    unsigned yStride;               /* Y stride of surfaces in this context */
++    int fd;                         /* FD for connection to drm module */
++    unsigned char intra_quantiser_matrix[64]; 
++    unsigned char non_intra_quantiser_matrix[64];
++    unsigned char chroma_intra_quantiser_matrix[64];
++    unsigned char chroma_non_intra_quantiser_matrix[64];
++    unsigned rendSurf[VIA_MAX_RENDSURF]; /* Which surfaces answer rendering to
++					    a rendering query */
++    int decoderOn;                       /* Decoder switched on ? */
++    int intraLoaded;                     /* Intra quantiser matrix loaded in 
++					    decoder? */
++    int nonIntraLoaded;                  /* Non-Intra quantiser matrix loaded
++					    in decoder */
++    int chromaIntraLoaded;
++    int chromaNonIntraLoaded;
++    int haveDecoder;                     /* Does this context own decoder? */
++    int attribChanged;                   /* Attributes have changed and need to
++					    be uploaded to Xv at next frame
++					    display */
++    drmLockPtr hwLock;                   /* Virtual address Pointer to the 
++					    heavyweight drm hardware lock */
++    unsigned xvMCPort;                   /* XvMC private port. Corresponds to
++					    an Xv port, but not by number */
++    ViaXvMCAttrHolder attrib;            /* This contexts attributes and their
++					    values */
++    XvAttribute attribDesc[VIA_NUM_XVMC_ATTRIBUTES]; /* Attribute decriptions */
++    int useAGP;                          /* Use the AGP ringbuffer to upload data to the chip */
++    void *xl;                            /* Lowlevel context. Opaque to us. */
++    int haveXv;                         /* Have I initialized the Xv 
++					   connection for this surface? */
++    XvImage *xvImage;                   /* Fake Xv Image used for command 
++					   buffer transport to the X server */
++    GC gc;                              /* X GC needed for displaying */
++    Drawable draw;                      /* Drawable to undisplay from */
++    XvPortID port;                      /* Xv Port ID when displaying */
++    int lastSrfDisplaying;
++    ContextRes resources;
++    CARD32 timeStamp;
++    CARD32 videoTimeStamp;
++    XID id;
++    unsigned screen;
++    unsigned depth;
++    unsigned stride;
++    XVisualInfo visualInfo;
++    void *drawHash;
++    CARD32 chipId;
++    XvMCRegion sRegion;
++    XvMCRegion dRegion;
++}ViaXvMCContext;
++
++typedef struct{
++    pthread_mutex_t subMutex;            /* Currently not used. */
++    unsigned srfNo;                      /* XvMC private surface number */
++    unsigned offset;                     /* Offset into frame-buffer area */
++    unsigned stride;                     /* Storage stride */
++    unsigned width;                      /* Width */
++    unsigned height;                     /* Height */
++    CARD32 palette[VIA_SUBPIC_PALETTE_SIZE]; /* YUV Palette */
++    ViaXvMCContext *privContext;         /* Pointer to context private data */
++    int ia44;                            /* IA44 or AI44 format */
++    int needsSync;
++    CARD32 timeStamp;
++}ViaXvMCSubPicture;
++
++
++typedef struct{
++    pthread_mutex_t srfMutex;           /* For multithreading. Not used. */
++    pthread_cond_t bufferAvailable;     /* For multithreading. Not used. */
++    unsigned srfNo;                     /* XvMC private surface numbers */
++    unsigned numBuffers;                /* Number of picture buffers */
++    unsigned curBuf;                    /* Which is the current buffer? */
++    unsigned offsets[VIA_MAX_BUFS];     /* Offsets of picture buffers 
++					   into the frame-buffer area */
++    unsigned yStride;                   /* Stride of YUV420 Y component. */ 
++    unsigned width;                     /* Dimensions */
++    unsigned height;
++    int progressiveSequence;            /* Mpeg progressive picture? Hmm? */
++    ViaXvMCContext *privContext;        /* XvMC context private part. */
++    ViaXvMCSubPicture *privSubPic;      /* Subpicture to be blended when 
++					   displaying. NULL if none. */
++    int needsSync;
++    int syncMode;
++    CARD32 timeStamp;
++    int topFieldFirst;
++}ViaXvMCSurface;
++
++/*
++ * Take and release the global drm hardware lock.
++ */
++
++#define HW_LOCK(ctx)						\
++    DRM_LOCK((ctx)->fd,(ctx)->hwLock,(ctx)->drmcontext,0)     
++#define HW_UNLOCK(ctx)						\
++    DRM_UNLOCK((ctx)->fd,(ctx->hwLock),(ctx)->drmcontext) 
++
++/*
++ * Low-level Mpeg functions in viaLowLevel.c
++ */ 
++
++#define VIABLIT_TRANSCOPY 0
++#define VIABLIT_COPY 1
++#define VIABLIT_FILL 2
++
++
++#endif
+--- xf86-video-via-0.1.32/src/xvmc/xf86dri.h.orig	1970-01-01 00:00:00.000000000 +0000
++++ xf86-video-via-0.1.32/src/xvmc/xf86dri.h	2005-11-20 17:44:25.000000000 +0000
+@@ -0,0 +1,121 @@
++/* $XFree86: xc/lib/GL/dri/xf86dri.h,v 1.8 2002/10/30 12:51:25 alanh Exp $ */
++/**************************************************************************
++
++Copyright 1998-1999 Precision Insight, Inc., Cedar Park, Texas.
++Copyright 2000 VA Linux Systems, Inc.
++All Rights Reserved.
++
++Permission is hereby granted, free of charge, to any person obtaining a
++copy of this software and associated documentation files (the
++"Software"), to deal in the Software without restriction, including
++without limitation the rights to use, copy, modify, merge, publish,
++distribute, sub license, and/or sell copies of the Software, and to
++permit persons to whom the Software is furnished to do so, subject to
++the following conditions:
++
++The above copyright notice and this permission notice (including the
++next paragraph) shall be included in all copies or substantial portions
++of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
++OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
++IN NO EVENT SHALL PRECISION INSIGHT AND/OR ITS SUPPLIERS BE LIABLE FOR
++ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
++TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
++SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++
++**************************************************************************/
++
++/**
++ * \file xf86dri.h
++ * Protocol numbers and function prototypes for DRI X protocol.
++ *
++ * \author Kevin E. Martin <martin@valinux.com>
++ * \author Jens Owen <jens@tungstengraphics.com>
++ * \author Rickard E. (Rik) Faith <faith@valinux.com>
++ */
++
++#ifndef _XF86DRI_H_
++#define _XF86DRI_H_
++
++#include <X11/Xfuncproto.h>
++#include <xf86drm.h>
++
++#define X_XF86DRIQueryVersion			0
++#define X_XF86DRIQueryDirectRenderingCapable	1
++#define X_XF86DRIOpenConnection			2
++#define X_XF86DRICloseConnection		3
++#define X_XF86DRIGetClientDriverName		4
++#define X_XF86DRICreateContext			5
++#define X_XF86DRIDestroyContext			6
++#define X_XF86DRICreateDrawable			7
++#define X_XF86DRIDestroyDrawable		8
++#define X_XF86DRIGetDrawableInfo		9
++#define X_XF86DRIGetDeviceInfo			10
++#define X_XF86DRIAuthConnection                 11
++#define X_XF86DRIOpenFullScreen                 12   /* Deprecated */
++#define X_XF86DRICloseFullScreen                13   /* Deprecated */
++
++#define XF86DRINumberEvents		0
++
++#define XF86DRIClientNotLocal		0
++#define XF86DRIOperationNotSupported	1
++#define XF86DRINumberErrors		(XF86DRIOperationNotSupported + 1)
++
++#ifndef _XF86DRI_SERVER_
++
++
++_XFUNCPROTOBEGIN
++
++Bool uniDRIQueryExtension( Display *dpy, int *event_base, int *error_base );
++
++Bool uniDRIQueryVersion( Display *dpy, int *majorVersion, int *minorVersion,
++			 int *patchVersion );
++
++Bool uniDRIQueryDirectRenderingCapable( Display *dpy, int screen,
++					Bool *isCapable );
++
++Bool uniDRIOpenConnection( Display *dpy, int screen, drm_handle_t *hSAREA,
++			   char **busIDString );
++
++Bool uniDRIAuthConnection( Display *dpy, int screen, drm_magic_t magic );
++
++Bool uniDRICloseConnection( Display *dpy, int screen );
++
++Bool uniDRIGetClientDriverName( Display *dpy, int screen,
++				int *ddxDriverMajorVersion, int *ddxDriverMinorVersion,
++				int *ddxDriverPatchVersion, char **clientDriverName );
++
++Bool uniDRICreateContext( Display *dpy, int screen, Visual *visual,
++			  XID *ptr_to_returned_context_id, drm_context_t *hHWContext );
++
++Bool uniDRICreateContextWithConfig( Display *dpy, int screen, int configID,
++				    XID *ptr_to_returned_context_id, drm_context_t *hHWContext );
++
++extern Bool uniDRIDestroyContext( Display *dpy, int screen,
++				  XID context_id );
++
++extern Bool uniDRICreateDrawable( Display *dpy, int screen,
++				  Drawable drawable, drm_drawable_t *hHWDrawable );
++
++extern Bool uniDRIDestroyDrawable( Display *dpy, int screen, 
++				   Drawable drawable);
++
++Bool uniDRIGetDrawableInfo( Display *dpy, int screen, Drawable drawable,
++			    unsigned int *index, unsigned int *stamp, 
++			    int *X, int *Y, int *W, int *H,
++			    int *numClipRects, drm_clip_rect_t ** pClipRects,
++			    int *backX, int *backY,
++			    int *numBackClipRects, drm_clip_rect_t **pBackClipRects );
++
++Bool uniDRIGetDeviceInfo( Display *dpy, int screen,
++			  drm_handle_t *hFrameBuffer, int *fbOrigin, int *fbSize,
++			  int *fbStride, int *devPrivateSize, void **pDevPrivate );
++
++_XFUNCPROTOEND
++
++#endif /* _XF86DRI_SERVER_ */
++
++#endif /* _XF86DRI_H_ */
++
+--- xf86-video-via-0.1.32/src/xvmc/xf86dristr.h.orig	1970-01-01 00:00:00.000000000 +0000
++++ xf86-video-via-0.1.32/src/xvmc/xf86dristr.h	2005-11-20 17:44:25.000000000 +0000
+@@ -0,0 +1,343 @@
++/* $XFree86: xc/lib/GL/dri/xf86dristr.h,v 1.10 2002/10/30 12:51:25 alanh Exp $ */
++/**************************************************************************
++
++Copyright 1998-1999 Precision Insight, Inc., Cedar Park, Texas.
++Copyright 2000 VA Linux Systems, Inc.
++All Rights Reserved.
++
++Permission is hereby granted, free of charge, to any person obtaining a
++copy of this software and associated documentation files (the
++"Software"), to deal in the Software without restriction, including
++without limitation the rights to use, copy, modify, merge, publish,
++distribute, sub license, and/or sell copies of the Software, and to
++permit persons to whom the Software is furnished to do so, subject to
++the following conditions:
++
++The above copyright notice and this permission notice (including the
++next paragraph) shall be included in all copies or substantial portions
++of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
++OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
++IN NO EVENT SHALL PRECISION INSIGHT AND/OR ITS SUPPLIERS BE LIABLE FOR
++ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
++TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
++SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++
++**************************************************************************/
++
++/*
++ * Authors:
++ *   Kevin E. Martin <martin@valinux.com>
++ *   Jens Owen <jens@tungstengraphics.com>
++ *   Rickard E. (Rik) Fiath <faith@valinux.com>
++ *
++ */
++
++#ifndef _XF86DRISTR_H_
++#define _XF86DRISTR_H_
++
++#include "xf86dri.h"
++
++#define XF86DRINAME "XFree86-DRI"
++
++/* The DRI version number.  This was originally set to be the same of the
++ * XFree86 version number.  However, this version is really indepedent of
++ * the XFree86 version.
++ *
++ * Version History:
++ *    4.0.0: Original
++ *    4.0.1: Patch to bump clipstamp when windows are destroyed, 28 May 02
++ *    4.1.0: Add transition from single to multi in DRMInfo rec, 24 Jun 02
++ */
++#define XF86DRI_MAJOR_VERSION	4
++#define XF86DRI_MINOR_VERSION	1
++#define XF86DRI_PATCH_VERSION	0
++
++typedef struct _XF86DRIQueryVersion {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRIQueryVersion */
++    CARD16	length B16;
++} xXF86DRIQueryVersionReq;
++#define sz_xXF86DRIQueryVersionReq	4
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    CARD16	majorVersion B16;	/* major version of DRI protocol */
++    CARD16	minorVersion B16;	/* minor version of DRI protocol */
++    CARD32	patchVersion B32;       /* patch version of DRI protocol */
++    CARD32	pad3 B32;
++    CARD32	pad4 B32;
++    CARD32	pad5 B32;
++    CARD32	pad6 B32;
++} xXF86DRIQueryVersionReply;
++#define sz_xXF86DRIQueryVersionReply	32
++
++typedef struct _XF86DRIQueryDirectRenderingCapable {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* X_DRIQueryDirectRenderingCapable */
++    CARD16	length B16;
++    CARD32	screen B32;
++} xXF86DRIQueryDirectRenderingCapableReq;
++#define sz_xXF86DRIQueryDirectRenderingCapableReq	8
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    BOOL	isCapable;
++    BOOL	pad2;
++    BOOL	pad3;
++    BOOL	pad4;
++    CARD32	pad5 B32;
++    CARD32	pad6 B32;
++    CARD32	pad7 B32;
++    CARD32	pad8 B32;
++    CARD32	pad9 B32;
++} xXF86DRIQueryDirectRenderingCapableReply;
++#define sz_xXF86DRIQueryDirectRenderingCapableReply	32
++
++typedef struct _XF86DRIOpenConnection {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRIOpenConnection */
++    CARD16	length B16;
++    CARD32	screen B32;
++} xXF86DRIOpenConnectionReq;
++#define sz_xXF86DRIOpenConnectionReq	8
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    CARD32	hSAREALow B32;
++    CARD32	hSAREAHigh B32;
++    CARD32	busIdStringLength B32;
++    CARD32	pad6 B32;
++    CARD32	pad7 B32;
++    CARD32	pad8 B32;
++} xXF86DRIOpenConnectionReply;
++#define sz_xXF86DRIOpenConnectionReply	32
++
++typedef struct _XF86DRIAuthConnection {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRICloseConnection */
++    CARD16	length B16;
++    CARD32	screen B32;
++    CARD32      magic B32;
++} xXF86DRIAuthConnectionReq;
++#define sz_xXF86DRIAuthConnectionReq	12
++
++typedef struct {
++    BYTE        type;
++    BOOL        pad1;
++    CARD16      sequenceNumber B16;
++    CARD32      length B32;
++    CARD32      authenticated B32;
++    CARD32      pad2 B32;
++    CARD32      pad3 B32;
++    CARD32      pad4 B32;
++    CARD32      pad5 B32;
++    CARD32      pad6 B32;
++} xXF86DRIAuthConnectionReply;
++#define zx_xXF86DRIAuthConnectionReply  32
++
++typedef struct _XF86DRICloseConnection {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRICloseConnection */
++    CARD16	length B16;
++    CARD32	screen B32;
++} xXF86DRICloseConnectionReq;
++#define sz_xXF86DRICloseConnectionReq	8
++
++typedef struct _XF86DRIGetClientDriverName {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRIGetClientDriverName */
++    CARD16	length B16;
++    CARD32	screen B32;
++} xXF86DRIGetClientDriverNameReq;
++#define sz_xXF86DRIGetClientDriverNameReq	8
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    CARD32	ddxDriverMajorVersion B32;
++    CARD32	ddxDriverMinorVersion B32;
++    CARD32	ddxDriverPatchVersion B32;
++    CARD32	clientDriverNameLength B32;
++    CARD32	pad5 B32;
++    CARD32	pad6 B32;
++} xXF86DRIGetClientDriverNameReply;
++#define sz_xXF86DRIGetClientDriverNameReply	32
++
++typedef struct _XF86DRICreateContext {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRICreateContext */
++    CARD16	length B16;
++    CARD32	screen B32;
++    CARD32	visual B32;
++    CARD32	context B32;
++} xXF86DRICreateContextReq;
++#define sz_xXF86DRICreateContextReq	16
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    CARD32	hHWContext B32;
++    CARD32	pad2 B32;
++    CARD32	pad3 B32;
++    CARD32	pad4 B32;
++    CARD32	pad5 B32;
++    CARD32	pad6 B32;
++} xXF86DRICreateContextReply;
++#define sz_xXF86DRICreateContextReply	32
++
++typedef struct _XF86DRIDestroyContext {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRIDestroyContext */
++    CARD16	length B16;
++    CARD32	screen B32;
++    CARD32	context B32;
++} xXF86DRIDestroyContextReq;
++#define sz_xXF86DRIDestroyContextReq	12
++
++typedef struct _XF86DRICreateDrawable {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRICreateDrawable */
++    CARD16	length B16;
++    CARD32	screen B32;
++    CARD32	drawable B32;
++} xXF86DRICreateDrawableReq;
++#define sz_xXF86DRICreateDrawableReq	12
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    CARD32	hHWDrawable B32;
++    CARD32	pad2 B32;
++    CARD32	pad3 B32;
++    CARD32	pad4 B32;
++    CARD32	pad5 B32;
++    CARD32	pad6 B32;
++} xXF86DRICreateDrawableReply;
++#define sz_xXF86DRICreateDrawableReply	32
++
++typedef struct _XF86DRIDestroyDrawable {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRIDestroyDrawable */
++    CARD16	length B16;
++    CARD32	screen B32;
++    CARD32	drawable B32;
++} xXF86DRIDestroyDrawableReq;
++#define sz_xXF86DRIDestroyDrawableReq	12
++
++typedef struct _XF86DRIGetDrawableInfo {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRIGetDrawableInfo */
++    CARD16	length B16;
++    CARD32	screen B32;
++    CARD32	drawable B32;
++} xXF86DRIGetDrawableInfoReq;
++#define sz_xXF86DRIGetDrawableInfoReq	12
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    CARD32	drawableTableIndex B32;
++    CARD32	drawableTableStamp B32;
++    INT16	drawableX B16;
++    INT16	drawableY B16;
++    INT16	drawableWidth B16;
++    INT16	drawableHeight B16;
++    CARD32	numClipRects B32;
++    INT16       backX B16;
++    INT16       backY B16;
++    CARD32      numBackClipRects B32;
++} xXF86DRIGetDrawableInfoReply;
++
++#define sz_xXF86DRIGetDrawableInfoReply	36
++
++
++typedef struct _XF86DRIGetDeviceInfo {
++    CARD8	reqType;		/* always DRIReqCode */
++    CARD8	driReqType;		/* always X_DRIGetDeviceInfo */
++    CARD16	length B16;
++    CARD32	screen B32;
++} xXF86DRIGetDeviceInfoReq;
++#define sz_xXF86DRIGetDeviceInfoReq	8
++
++typedef struct {
++    BYTE	type;			/* X_Reply */
++    BOOL	pad1;
++    CARD16	sequenceNumber B16;
++    CARD32	length B32;
++    CARD32	hFrameBufferLow B32;
++    CARD32	hFrameBufferHigh B32;
++    CARD32	framebufferOrigin B32;
++    CARD32	framebufferSize B32;
++    CARD32	framebufferStride B32;
++    CARD32	devPrivateSize B32;
++} xXF86DRIGetDeviceInfoReply;
++#define sz_xXF86DRIGetDeviceInfoReply	32
++
++typedef struct _XF86DRIOpenFullScreen {
++    CARD8       reqType;	/* always DRIReqCode */
++    CARD8       driReqType;	/* always X_DRIOpenFullScreen */
++    CARD16      length B16;
++    CARD32      screen B32;
++    CARD32      drawable B32;
++} xXF86DRIOpenFullScreenReq;
++#define sz_xXF86DRIOpenFullScreenReq    12
++
++typedef struct {
++    BYTE        type;
++    BOOL        pad1;
++    CARD16      sequenceNumber B16;
++    CARD32      length B32;
++    CARD32      isFullScreen B32;
++    CARD32      pad2 B32;
++    CARD32      pad3 B32;
++    CARD32      pad4 B32;
++    CARD32      pad5 B32;
++    CARD32      pad6 B32;
++} xXF86DRIOpenFullScreenReply;
++#define sz_xXF86DRIOpenFullScreenReply  32
++
++typedef struct _XF86DRICloseFullScreen {
++    CARD8       reqType;	/* always DRIReqCode */
++    CARD8       driReqType;	/* always X_DRICloseFullScreen */
++    CARD16      length B16;
++    CARD32      screen B32;
++    CARD32      drawable B32;
++} xXF86DRICloseFullScreenReq;
++#define sz_xXF86DRICloseFullScreenReq   12
++
++typedef struct {
++    BYTE        type;
++    BOOL        pad1;
++    CARD16      sequenceNumber B16;
++    CARD32      length B32;
++    CARD32      pad2 B32;
++    CARD32      pad3 B32;
++    CARD32      pad4 B32;
++    CARD32      pad5 B32;
++    CARD32      pad6 B32;
++    CARD32      pad7 B32;
++} xXF86DRICloseFullScreenReply;
++#define sz_xXF86DRICloseFullScreenReply  32
++
++
++#endif /* _XF86DRISTR_H_ */
