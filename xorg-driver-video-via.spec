@@ -1,18 +1,17 @@
 Summary:	X.org video driver for VIA chipsets with onboard unichrome graphics
 Summary(pl):	Sterownik obrazu X.org dla uk³adów zintegrowanych VIA
 Name:		xorg-driver-video-via
-Version:	0.1.32
+Version:	0.1.33
 Release:	0.1
 License:	MIT
 Group:		X11/Applications
-Source0:	http://xorg.freedesktop.org/releases/X11R7.0-RC2/driver/xf86-video-via-%{version}.tar.bz2
-# Source0-md5:	f6e054715bdc0ddfa0bc135d12457e01
-Patch0:		%{name}-cvs.patch
+Source0:	http://xorg.freedesktop.org/releases/X11R7.0-RC3/driver/xf86-video-via-%{version}.tar.bz2
+# Source0-md5:	c3c5e8fcd86d07a92067eb951f18e6a4
 URL:		http://xorg.freedesktop.org/
 BuildRequires:	Mesa-libGL-devel
 BuildRequires:	autoconf >= 2.57
 BuildRequires:	automake
-BuildRequires:	libdrm-devel >= 1.0.5
+BuildRequires:	libdrm-devel >= 2.0
 BuildRequires:	libtool
 BuildRequires:	pkgconfig >= 1:0.19
 BuildRequires:	xorg-lib-libXvMC-devel
@@ -21,7 +20,7 @@ BuildRequires:	xorg-proto-randrproto-devel
 BuildRequires:	xorg-proto-renderproto-devel
 BuildRequires:	xorg-proto-videoproto-devel
 BuildRequires:	xorg-proto-xf86driproto-devel
-BuildRequires:	xorg-util-util-macros >= 0.99.1
+BuildRequires:	xorg-util-util-macros >= 0.99.2
 BuildRequires:	xorg-xserver-server-devel >= 0.99.3
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -37,7 +36,6 @@ i CN400 jest jeszcze w trakcie pisania.
 
 %prep
 %setup -q -n xf86-video-via-%{version}
-%patch0 -p1
 
 %build
 %{__libtoolize}
@@ -54,8 +52,7 @@ i CN400 jest jeszcze w trakcie pisania.
 rm -rf $RPM_BUILD_ROOT
 
 %{__make} install \
-	DESTDIR=$RPM_BUILD_ROOT \
-	drivermandir=%{_mandir}/man4
+	DESTDIR=$RPM_BUILD_ROOT
 
 rm -f $RPM_BUILD_ROOT%{_libdir}/xorg/modules/*/*.la \
 	$RPM_BUILD_ROOT%{_libdir}/libviaXvMC*.la
@@ -71,4 +68,4 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_libdir}/libviaXvMC.so.*.*.*
 %attr(755,root,root) %{_libdir}/libviaXvMCPro.so.*.*.*
 %endif
-%{_mandir}/man4/via.4x*
+%{_mandir}/man4/via.4*
