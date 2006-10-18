@@ -1,12 +1,12 @@
 Summary:	X.org video driver for VIA chipsets with onboard unichrome graphics
 Summary(pl):	Sterownik obrazu X.org dla uk³adów zintegrowanych VIA
 Name:		xorg-driver-video-via
-Version:	0.2.1
+Version:	0.2.2
 Release:	0.1
 License:	MIT
 Group:		X11/Applications
 Source0:	http://xorg.freedesktop.org/releases/individual/driver/xf86-video-via-%{version}.tar.bz2
-# Source0-md5:	7c92846dcf363204f7530fa0fa621e43
+# Source0-md5:	d5fe25d3cfa0a64cc77681f15f9c3159
 URL:		http://xorg.freedesktop.org/
 BuildRequires:	Mesa-libGL-devel
 BuildRequires:	autoconf >= 2.57
@@ -27,12 +27,12 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
 X.org video driver for VIA chipsets with onboard unichrome graphics.
-It supports VIA CLE266, KM400/KN400, K8M800/K8N800, PM8X0 and
+It supports VIA CLE266, KM400/KN400, K8M800/K8N800, PM800/PN800 and
 CN400 chipsets.
 
 %description -l pl
 Sterownik obrazu X.org dla zintegrowanych uk³adów graficznych VIA.
-Obs³uguje uk³ady VIA CLE266, KM400/KN400, K8M800/K8N800, PM8X0 i
+Obs³uguje uk³ady VIA CLE266, KM400/KN400, K8M800/K8N800, PM800/PN800 i
 CN400.
 
 %prep
