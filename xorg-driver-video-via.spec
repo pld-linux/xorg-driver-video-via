@@ -1,5 +1,5 @@
 Summary:	X.org video driver for VIA chipsets with onboard unichrome graphics
-Summary(pl):	Sterownik obrazu X.org dla uk³adów zintegrowanych VIA
+Summary(pl.UTF-8):   Sterownik obrazu X.org dla ukÅ‚adÃ³w zintegrowanych VIA
 Name:		xorg-driver-video-via
 Version:	0.2.2
 Release:	0.1
@@ -30,9 +30,9 @@ X.org video driver for VIA chipsets with onboard unichrome graphics.
 It supports VIA CLE266, KM400/KN400, K8M800/K8N800, PM800/PN800 and
 CN400 chipsets.
 
-%description -l pl
-Sterownik obrazu X.org dla zintegrowanych uk³adów graficznych VIA.
-Obs³uguje uk³ady VIA CLE266, KM400/KN400, K8M800/K8N800, PM800/PN800 i
+%description -l pl.UTF-8
+Sterownik obrazu X.org dla zintegrowanych ukÅ‚adÃ³w graficznych VIA.
+ObsÅ‚uguje ukÅ‚ady VIA CLE266, KM400/KN400, K8M800/K8N800, PM800/PN800 i
 CN400.
 
 %prep
