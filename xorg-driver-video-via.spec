@@ -60,7 +60,7 @@ rm -rf $RPM_BUILD_ROOT
 	DESTDIR=$RPM_BUILD_ROOT
 
 rm -f $RPM_BUILD_ROOT%{_libdir}/xorg/modules/*/*.la \
-	$RPM_BUILD_ROOT%{_libdir}/libviaXvMC*.la
+	$RPM_BUILD_ROOT%{_libdir}/libviaXvMC*.{la,so}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -71,6 +71,8 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_libdir}/xorg/modules/drivers/via_drv.so
 %ifarch %{ix86} %{x8664}
 %attr(755,root,root) %{_libdir}/libviaXvMC.so.*.*.*
+%attr(755,root,root) %ghost %{_libdir}/libviaXvMC.so.1
 %attr(755,root,root) %{_libdir}/libviaXvMCPro.so.*.*.*
+%attr(755,root,root) %ghost %{_libdir}/libviaXvMCPro.so.1
 %endif
 %{_mandir}/man4/via.4*
