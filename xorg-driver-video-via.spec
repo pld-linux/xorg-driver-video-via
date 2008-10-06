@@ -2,11 +2,12 @@ Summary:	X.org video driver for VIA chipsets with onboard unichrome graphics
 Summary(pl.UTF-8):	Sterownik obrazu X.org dla układów zintegrowanych VIA
 Name:		xorg-driver-video-via
 Version:	0.2.2
-Release:	3
+Release:	4
 License:	MIT
 Group:		X11/Applications
 Source0:	http://xorg.freedesktop.org/releases/individual/driver/xf86-video-via-%{version}.tar.bz2
 # Source0-md5:	d5fe25d3cfa0a64cc77681f15f9c3159
+Patch0:		%{name}-build-fix.patch
 URL:		http://xorg.freedesktop.org/
 BuildRequires:	Mesa-libGL-devel
 BuildRequires:	autoconf >= 2.57
@@ -16,6 +17,7 @@ BuildRequires:	libtool
 BuildRequires:	pkgconfig >= 1:0.19
 BuildRequires:	xorg-lib-libXvMC-devel
 BuildRequires:	xorg-proto-fontsproto-devel
+BuildRequires:	xorg-proto-glproto-devel
 BuildRequires:	xorg-proto-randrproto-devel
 BuildRequires:	xorg-proto-renderproto-devel
 BuildRequires:	xorg-proto-videoproto-devel
@@ -41,6 +43,7 @@ CN400.
 
 %prep
 %setup -q -n xf86-video-via-%{version}
+%patch0 -p1
 
 %build
 %{__libtoolize}
