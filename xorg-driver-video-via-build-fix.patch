@@ -1,0 +1,90 @@
+Index: xserver-xorg-video-via/src/via_drmclient.h
+===================================================================
+--- xserver-xorg-video-via.orig/src/via_drmclient.h
++++ xserver-xorg-video-via/src/via_drmclient.h
+@@ -24,6 +24,7 @@
+ #ifndef _VIA_DRMCLIENT_H
+ #define _VIA_DRMCLIENT_H
+ 
++#include <stdint.h>
+ #include "drm.h"
+ #include "xf86drm.h"
+ 
+Index: xserver-xorg-video-via/src/via_driver.c
+===================================================================
+--- xserver-xorg-video-via.orig/src/via_driver.c
++++ xserver-xorg-video-via/src/via_driver.c
+@@ -989,13 +989,13 @@
+     /* ActiveDevice Option for device selection */
+     pVia->ActiveDevice = 0x00;
+     if ((s = xf86GetOptValString(VIAOptions, OPTION_ACTIVEDEVICE))) {
+-	if (xf86strstr(s, "CRT"))
++	if (strstr(s, "CRT"))
+ 	    pVia->ActiveDevice |= VIA_DEVICE_CRT;
+-	if (xf86strstr(s, "LCD"))
++	if (strstr(s, "LCD"))
+ 	    pVia->ActiveDevice |= VIA_DEVICE_LCD;
+-	if (xf86strstr(s, "DFP")) /* just treat this the same as LCD */
++	if (strstr(s, "DFP")) /* just treat this the same as LCD */
+ 	    pVia->ActiveDevice |= VIA_DEVICE_LCD;
+-	if (xf86strstr(s, "TV"))
++	if (strstr(s, "TV"))
+ 	    pVia->ActiveDevice |= VIA_DEVICE_TV;
+     }
+ 
+Index: xserver-xorg-video-via/src/via_memcpy.c
+===================================================================
+--- xserver-xorg-video-via.orig/src/via_memcpy.c
++++ xserver-xorg-video-via/src/via_memcpy.c
+@@ -329,7 +329,7 @@
+     if ( yuv422 ) w <<= 1;
+     if (dstPitch == w) {
+ 	int size = h*((yuv422) ? w : (w + (w >> 1)));
+-	xf86memcpy(dst, src, size);
++	memcpy(dst, src, size);
+ 	return;
+     } else {
+ 	int count;
+@@ -338,7 +338,7 @@
+ 
+ 	count = h;
+ 	while(count--) {
+-	    xf86memcpy(dst, src, w);
++	    memcpy(dst, src, w);
+ 	    src += w;
+ 	    dst += dstPitch;
+ 	}
+@@ -354,7 +354,7 @@
+ 
+ 	    count = h;
+ 	    while(count--) {
+-		xf86memcpy(dst, src, w);
++		memcpy(dst, src, w);
+ 		src += w;
+ 		dst += dstPitch;
+ 	    }
+Index: xserver-xorg-video-via/src/via.h
+===================================================================
+--- xserver-xorg-video-via.orig/src/via.h
++++ xserver-xorg-video-via/src/via.h
+@@ -29,6 +29,7 @@
+ #include <string.h>
+ #include <stdio.h>
+ #include <math.h>
++#include <unistd.h>
+ 
+ /* Video status flag */
+ 
+Index: xserver-xorg-video-via/src/via_driver.h
+===================================================================
+--- xserver-xorg-video-via.orig/src/via_driver.h
++++ xserver-xorg-video-via/src/via_driver.h
+@@ -409,7 +409,7 @@
+ /* In via_memory.c */
+ void VIAFreeLinear(VIAMemPtr);
+ int VIAAllocLinear(VIAMemPtr, ScrnInfoPtr, unsigned long);
+-int viaOffscreenLinear(VIAMemPtr, ScrnInfoPtr, unsigned long);
++int viaOffScreenLinear(VIAMemPtr, ScrnInfoPtr, unsigned long);
+ void VIAInitLinear(ScreenPtr pScreen);
+ 
+ /* In via_xwmc.c */
