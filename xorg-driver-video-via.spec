@@ -2,7 +2,7 @@ Summary:	X.org video driver for VIA chipsets with onboard unichrome graphics
 Summary(pl.UTF-8):	Sterownik obrazu X.org dla układów zintegrowanych VIA
 Name:		xorg-driver-video-via
 Version:	0.2.2
-Release:	6
+Release:	7
 License:	MIT
 Group:		X11/Applications
 Source0:	http://xorg.freedesktop.org/releases/individual/driver/xf86-video-via-%{version}.tar.bz2
@@ -27,6 +27,7 @@ BuildRequires:	xorg-util-util-macros >= 0.99.2
 BuildRequires:	xorg-xserver-server-devel >= 1.0.99.901
 %{?requires_xorg_xserver_videodrv}
 Requires:	xorg-xserver-server >= 1.0.99.901
+Provides:	xorg-driver-video
 Obsoletes:	X11-driver-via < 1:7.0.0
 Obsoletes:	XFree86-driver-via < 1:7.0.0
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
