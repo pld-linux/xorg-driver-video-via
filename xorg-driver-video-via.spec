@@ -44,7 +44,7 @@ CN400.
 
 %prep
 %setup -q -n xf86-video-via-%{version}
-%patch0 -p1
+%patch -P0 -p1
 
 %build
 %{__libtoolize}
